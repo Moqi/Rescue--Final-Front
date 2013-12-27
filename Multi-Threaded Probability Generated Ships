@@ -1,0 +1,163 @@
+	void CreateShips_Init()
+	{
+		// Difficult is first 4 numbers of seed.
+		int difficulty = 0;		
+		for (int i = 0; i < 4; i++)
+		{
+    		difficulty += fleetSeed[i] * System.Convert.ToInt32(System.Math.Pow(10, 4-i-1));
+		}
+		difficulty = System.Math.Abs(difficulty);	
+
+		// [NOTE]
+		// Use difficulty to determine type of ships. The higher the difficulty, the larger the amount of ships
+		// and higher the chance of them being stronger.
+		// Less than 5 ships should be all scouts.
+		
+		// int because we don't want any fractions.
+		int shipAmount = difficulty / 100;
+		factionNames = FactionTracker.Instance.GetFactionNames();
+		factionCount = FactionTracker.Instance.GetFactionCount();
+		
+		
+		for (int createShips = 0; createShips < shipAmount; createShips++)
+		{			
+			AiShip ship = new AiShip();
+			Thread shipGenThread = new Thread(() => ShipGenerationThread(ship, difficulty));
+			shipGenThread.Start();
+		}
+	}
+	
+		void ShipGenerationThread(AiShip inShip, int inDif)
+	{
+		inShip = ShipFactionDeterminer(inShip);
+		inShip = ShipShipDeterminer(inShip, inDif);
+		allShips.Add(inShip);
+	}
+	
+		AiShip ShipShipDeterminer (AiShip inShip, int inDifficulty) 
+		{
+  		string factionFile = resourcePath + "/Resources/Ships/" + inShip.getFaction() + "/shipdata.xml";
+  		XDocument factionShips = XDocument.Load(factionFile);
+  		int shipCount = (int)factionShips.Descendants("ShipAttributes").Count();
+  		double[] probabilities= CreateProbabilities(shipCount, inDifficulty, true);
+  		int shipIndex = PickFaction(probabilities);
+  		var node = factionShips.Descendants("ShipAttributes").Skip(shipIndex - 1).Take(1);
+  		string shipname = "";
+  		foreach (var nodes in node)
+  		{
+  			shipname = (string)nodes.Element("name");	
+  		}
+  
+  		inShip.setAttributes(Ships.LoadAiShip(shipname));
+  		return inShip;		
+	}
+	
+	AiShip ShipFactionDeterminer (AiShip inShip)
+	{
+	  // Don't want to reveal all the source!
+	}
+	
+	double[] CreateProbabilities (int inShipAmount, int inDiffuclty, bool Parabolic) 
+	{
+		// Gets the ship with the highest probability
+		double[] probabilities;
+		probabilities = new double[inShipAmount];
+		
+		double vertexD = (inShipAmount * inDiffuclty / 9999);
+		int vertex = (int)System.Math.Round(vertexD, System.MidpointRounding.AwayFromZero);
+		probabilities[vertex] = 50;
+		
+		// Regular Cases
+		if (vertex > 0 && vertex < inShipAmount - 1)
+		{
+			probabilities = LeftSideParabola(probabilities, vertex, inShipAmount);
+			probabilities = RightSideParabola(probabilities, vertex, inShipAmount);
+		}		
+		
+		// Special Cases
+		// Nothing on Left
+		if (vertex == 0) 
+		{
+			probabilities = RightSideSpecialCase(probabilities, inShipAmount);
+		}
+		// Nothing on Right
+		if (vertex == inShipAmount)
+		{
+			probabilities = LeftSideSpecialCase(probabilities, inShipAmount);
+		}
+
+		return probabilities;
+	}
+	
+	double[] LeftSideParabola(double[] probabilities, int vertex, int inShipAmount)
+	{
+		int difference = 1;
+		if (vertex > 1)
+			difference = vertex;
+		int high = vertex - 1;
+		int low = 0;
+		int midpoint = -1;
+		int calculations = 0;
+		double baseProbability = 25.0 / (double)difference;
+		
+		if (difference == 1)
+		{
+			probabilities[0] = 25;	
+			return probabilities;	
+		}
+		
+		if (difference % 2 > 0)
+		{			
+			midpoint = (int)System.Math.Round((double)(difference/2), System.MidpointRounding.AwayFromZero);
+			//Debug.Log("Midpoint: " + midpoint);
+			probabilities[midpoint - 1] = baseProbability;
+		}		
+		
+		// Should round down. If not force round down.
+		calculations = difference / 2;
+		
+		for (int ndx = 2; ndx < calculations + 2; ++ndx)
+		{
+			double probabilityMod = (baseProbability / ndx) * 2.0;
+			probabilities[high] = baseProbability + probabilityMod;
+			probabilities[low] = baseProbability - probabilityMod;
+			high -= 1;
+			low += 1;
+		}
+		
+		return probabilities;
+	}
+	
+	double[] RightSideParabola(double[] probabilities, int vertex, int inShipAmount)
+	{
+		// Dont wan't to reveal all the source!
+	}
+	
+	// Vertex is 0
+	double[] RightSideSpecialCase(double[] probabilities, int inShipAmount)
+	{
+	  // Dont wan't to reveal all the source!	
+	}
+	
+	// Vertex is Max
+	double[] LeftSideSpecialCase(double[] probabilities, int inShipAmount)
+	{
+	  // Dont wan't to reveal all the source!
+	}
+	
+	// Pick a faction based on probabilities. 
+	int PickFaction (double[] probabilities) 
+	{
+		int count = probabilities.Count();
+		double pick = (double)SystemSeed.RandomSeed_Custom(count,99);
+		double sum = 0;
+		int i=1;
+        while(sum < pick) 
+		{
+        	sum = sum + probabilities[i];
+			++i;
+			if (i > count - 1)
+				break;
+        }
+		return (i-1);
+	}
